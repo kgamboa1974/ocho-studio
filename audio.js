@@ -60,9 +60,20 @@ export function clipGainPoints(clip,length,secondsPerBlock){
  return times.map(at=>({at,value:factor(at)}));
 }
 export function editClipRange(clip,asset,project,rangeStart,rangeEnd,operation,value=1,newId=()=>crypto.randomUUID()){
- if(!['delete','mute','volume','fade-in','fade-out','split','trim'].includes(operation))throw Error('Edición de tramo desconocida.');
+ if(!['delete','mute','volume','fade-in','fade-out','split','trim','ripple-delete'].includes(operation))throw Error('Edición de tramo desconocida.');
  const seconds=blockSeconds(project.bpm),length=clipWindow(clip,asset,project).length/seconds;
  const start=clip.start,end=start+length,from=Math.max(start,rangeStart),to=Math.min(end,rangeEnd);
+ if(operation==='ripple-delete'){
+  if(!Number.isFinite(rangeStart)||!Number.isFinite(rangeEnd)||rangeStart<0||rangeEnd<=rangeStart||rangeEnd>project.blocks)throw Error('Tramo de corte no válido.');
+  const cut=editClipRange(clip,asset,project,rangeStart,rangeEnd,'delete',value,newId);let moved=false;
+  const clips=cut.clips.map(part=>{
+   if(part.start<rangeEnd-1e-10)return part;
+   const oldLength=clipWindow(part,asset,project).length/seconds;
+   const bounded=editClipRange(part,asset,project,part.start,part.start+oldLength,'trim',value,newId).clips[0];
+   moved=true;return {...bounded,start:Math.abs(part.start-rangeEnd)<1e-10?rangeStart:part.start-(rangeEnd-rangeStart)};
+  });
+  return {clips,edited:cut.edited||moved,editedId:cut.editedId};
+ }
  if(operation==='split'){
   if(rangeStart<=start+1e-10||rangeStart>=end-1e-10)return {clips:[clip],edited:false,editedId:null};
   return editClipRange(clip,asset,project,rangeStart,end,'volume',clip.volume,newId);
@@ -73,7 +84,7 @@ export function editClipRange(clip,asset,project,rangeStart,rangeEnd,operation,v
   if(b-a<=1e-10)return;
   const id=pieces.length?newId():clip.id,relative=a-start,last=b-start;
   const times=[relative,...points.map(p=>p.at).filter(t=>t>relative&&t<last),last];
-  const part={...clip,id,start:a,length:b-a,offset:clip.offset+relative*seconds,fadeIn:0,fadeOut:0,gainPoints:times.map(t=>({at:t-relative,value:gainAt(points,t)}))};
+  const part={...clip,editGroupId:clip.editGroupId||clip.id,id,start:a,length:b-a,offset:clip.offset+relative*seconds,fadeIn:0,fadeOut:0,gainPoints:times.map(t=>({at:t-relative,value:gainAt(points,t)}))};
   if(inside){
    editedId=id;
    if(operation==='mute')part.volume=0;
@@ -85,6 +96,32 @@ export function editClipRange(clip,asset,project,rangeStart,rangeEnd,operation,v
  };
  if(operation!=='trim')piece(start,from,false);if(operation!=='delete')piece(from,to,true);if(operation!=='trim')piece(to,end,false);
  return {clips:pieces,edited:true,editedId};
+}
+// Only related fragments share an editor. Legacy non-ripple cuts retain the same
+// source/time origin; infer that family only when its members do not overlap.
+export function editorClipFamily(clip,project){
+ if(clip.editGroupId)return project.clips.filter(c=>c.assetId===clip.assetId&&c.editGroupId===clip.editGroupId);
+ if(!clip.gainPoints)return [clip];
+ const seconds=blockSeconds(project.bpm),origin=clip.start*seconds-clip.offset;
+ const family=project.clips.filter(c=>!c.editGroupId&&c.gainPoints&&c.assetId===clip.assetId&&c.category===clip.category&&Math.abs(c.start*seconds-c.offset-origin)<1e-6).sort((a,b)=>a.start-b.start);
+ for(let i=1;i<family.length;i++)if(family[i].start<family[i-1].start+family[i-1].length-1e-9)return [clip];
+ return family.length?family:[clip];
+}
+export function clipGaps(clips,assets,project){
+ const spans=clips.map(c=>{const a=assets.get(c.assetId);return {start:c.start,end:c.start+(a?clipWindow(c,a,project).length/blockSeconds(project.bpm):0)};}).filter(s=>s.end>s.start).sort((a,b)=>a.start-b.start);
+ const gaps=[];let end=spans[0]?.end;
+ for(const span of spans.slice(1)){if(span.start>end+1e-10)gaps.push({from:end,to:span.start});end=Math.max(end,span.end);}
+ return gaps;
+}
+export function closeClipGaps(clips,assets,project){
+ const gaps=clipGaps(clips,assets,project),seconds=blockSeconds(project.bpm);
+ const result=clips.map(clip=>{
+  const removed=gaps.filter(g=>g.to<=clip.start+1e-10).reduce((n,g)=>n+g.to-g.from,0);if(!removed)return clip;
+  const asset=assets.get(clip.assetId),length=clipWindow(clip,asset,project).length/seconds;
+  const bounded=editClipRange(clip,asset,project,clip.start,clip.start+length,'trim').clips[0];
+  return {...bounded,start:clip.start-removed};
+ });
+ return {clips:result,gaps,removed:gaps.reduce((n,g)=>n+g.to-g.from,0)};
 }
 export function scheduleMix(ctx,project,assets,when,position=0,{click=false,destination=ctx.destination}={}) {
  const nodes=[];
@@ -112,7 +149,7 @@ export function scheduleMix(ctx,project,assets,when,position=0,{click=false,dest
 export function validateProject(p) {
  if(!p||p.version!==1||typeof p.name!=='string'||p.name.length>100||!Number.isFinite(p.bpm)||p.bpm<60||p.bpm>200||!Number.isInteger(p.blocks)||p.blocks<1||p.blocks>64||!Array.isArray(p.clips)||p.clips.length>512)throw Error('Formato de proyecto no válido.');
  const ids=new Set();
- for(const c of p.clips){if(!c||typeof c.id!=='string'||ids.has(c.id)||typeof c.assetId!=='string'||!CATEGORIES.includes(c.category)||!Number.isFinite(c.start)||c.start<0||c.start>=p.blocks||!Number.isFinite(c.length)||c.length<=0||!Number.isFinite(c.offset)||c.offset<0||!Number.isFinite(c.volume)||c.volume<0||c.volume>1||!Number.isFinite(c.fadeIn)||c.fadeIn<0||!Number.isFinite(c.fadeOut)||c.fadeOut<0)throw Error('El proyecto contiene un clip no válido.');if(c.gainPoints){
+ for(const c of p.clips){if(!c||typeof c.id!=='string'||ids.has(c.id)||typeof c.assetId!=='string'||!CATEGORIES.includes(c.category)||!Number.isFinite(c.start)||c.start<0||c.start>=p.blocks||!Number.isFinite(c.length)||c.length<=0||!Number.isFinite(c.offset)||c.offset<0||!Number.isFinite(c.volume)||c.volume<0||c.volume>1||!Number.isFinite(c.fadeIn)||c.fadeIn<0||!Number.isFinite(c.fadeOut)||c.fadeOut<0)throw Error('El proyecto contiene un clip no válido.');if(c.editGroupId!==undefined&&(typeof c.editGroupId!=='string'||!c.editGroupId.length||c.editGroupId.length>512))throw Error('Grupo de edición no válido.');if(c.gainPoints){
   if(!Array.isArray(c.gainPoints)||c.gainPoints.length<2||c.gainPoints.length>32)throw Error('Envolvente de audio no válida.');
   let previous=-1;
   for(const p of c.gainPoints){if(!Number.isFinite(p.at)||p.at<0||p.at>c.length+1e-9||p.at<=previous||!Number.isFinite(p.value)||p.value<0||p.value>1)throw Error('Envolvente de audio no válida.');previous=p.at;}

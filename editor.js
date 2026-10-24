@@ -1,4 +1,4 @@
-import {blockSeconds,clipWindow,formatTime,clamp,clipGainPoints,gainAt,scheduleMix,writeWav} from './audio.js?v=1.4.0';
+import {blockSeconds,clipWindow,formatTime,clamp,clipGainPoints,gainAt,scheduleMix,writeWav,clipGaps} from './audio.js?v=1.5.0';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const session=new URL(location.href).searchParams.get('session'),host=window.opener||(parent!==window?parent:null),origin=location.origin==='null'?'*':location.origin;
 let state=null,buffer=null,bufferId=null,decodeGeneration=0,audio,selection=null,cursor=0,zoom=1,pointer=null,dragFrame,preview=null,previewFrame,pending=null,requestSequence=0,exporting=false;
@@ -49,7 +49,7 @@ function updateButtons(){
  const ready=!!state&&!!buffer&&!pending&&!exporting,hasAudio=ready&&state.clips.length>0;
  $('#editor-play').disabled=!hasAudio;$('#editor-play-range').disabled=!hasAudio||!hasSelection();$('#editor-export').disabled=!hasAudio;
  $('#editor-split').disabled=!hasAudio||!state.clips.some(c=>{const end=c.start+clipWindow(c,state.asset,editedProject()).length/secondsPerBlock();return cursor>c.start+1e-10&&cursor<end-1e-10;});
- $('#editor-undo').disabled=!ready||!state.canUndo;$$('[data-edit]').forEach(button=>button.disabled=!hasAudio||!hasSelection());
+ $('#editor-undo').disabled=!ready||!state.canUndo;$$('[data-edit]').forEach(button=>button.disabled=button.dataset.edit==='close-gaps'?(!hasAudio||!clipGaps(state.clips,new Map([[state.asset.id,state.asset]]),editedProject()).length):(!hasAudio||!hasSelection()));
  for(const input of [$('#editor-from'),$('#editor-to')]){input.disabled=!ready;input.max=duration();}
 }
 function drawWave(){
@@ -104,8 +104,9 @@ async function receive(e){
  if(message.type==='OCHO_EDITOR_CLOSE'){stopPreview();if(window.opener)window.close();return;}
  if(message.type==='OCHO_EDITOR_STOP'){stopPreview();return;}
  if(message.type!=='OCHO_EDITOR_STATE')return;
- const previous=state;stopPreview();state=message;if(message.replyTo===pending)pending=null;
+ const previous=state,ownReply=pending!==null&&message.replyTo===pending;stopPreview();state=message;if(ownReply)pending=null;
  if(!previous){cursor=state.start;selection=null;}else{cursor=clamp(cursor,state.start,state.end);if(selection){selection.start=clamp(selection.start,state.start,state.end);selection.end=clamp(selection.end,state.start,state.end);if(!hasSelection())selection=null;}}
+ if(ownReply&&message.editResult?.kind==='collapse'){cursor=clamp(message.editResult.at,state.start,state.end);selection=null;}
  $('#editor-title').textContent=state.asset.name;document.title=state.asset.name+' — Editor OCHO';$('#editor-summary').textContent=state.name+' · '+state.bpm+' BPM · '+state.clips.length+' fragmento'+(state.clips.length===1?'':'s');$('#editor-piece-count').textContent=state.clips.length+' fragmentos';$('#editor-length').textContent='/ '+formatTime(duration(),true,3);
  if(!buffer||bufferId!==state.asset.id){
   const generation=++decodeGeneration;buffer=null;bufferId=state.asset.id;updateButtons();status('Preparando la onda de audio…');
@@ -136,7 +137,7 @@ document.addEventListener('keydown',e=>{
  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey){e.preventDefault();request('undo');return;}
  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='a'){e.preventDefault();selectAll();return;}
  if(e.key==='Escape'){e.preventDefault();selection=null;paintSelection();return;}
- if((e.key==='Backspace'||e.key==='Delete')&&!e.metaKey&&!e.ctrlKey&&!e.altKey){e.preventDefault();if(!e.repeat)request('delete');return;}
+ if((e.key==='Backspace'||e.key==='Delete')&&!e.metaKey&&!e.ctrlKey&&!e.altKey){e.preventDefault();if(!e.repeat)request(e.shiftKey?'delete':'ripple-delete');return;}
  if(e.code==='Space'&&e.target.tagName!=='BUTTON'){e.preventDefault();playPreview(false);return;}
  if(state&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();stopPreview();const before=cursor,step=(e.shiftKey ? .01 : .001)/secondsPerBlock();cursor=e.key==='Home'?state.start:e.key==='End'?state.end:clamp(cursor+(e.key==='ArrowRight'?step:-step),state.start,state.end);paintCursor();if(e.shiftKey){const anchor=hasSelection()?selection.start:before;selection={start:Math.min(anchor,cursor),end:Math.max(anchor,cursor)};}paintSelection();}
 });

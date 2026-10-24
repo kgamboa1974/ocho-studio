@@ -1,4 +1,4 @@
-# OCHO Studio 1.4.0
+# OCHO Studio 1.5.0
 
 Mezclador web de rutinas de cheerleading por bloques de ocho tiempos.
 
@@ -39,3 +39,11 @@ Amplía la onda, arrastra para seleccionar un tramo o escribe Desde/Hasta en seg
 El botón MultiSesion regresa a la cuadrícula completa de Música, Efectos y Voces. Las ediciones se reflejan directamente en el proyecto, se guardan con él y comparten Deshacer (⌘Z). Los cortes mantienen el audio original en la biblioteca. El editor se cierra cuando creas o abres otro proyecto.
 
 Se probaron con Chromium la apertura por doble clic, los cortes y ajustes sincronizados, reproducción y exportación aisladas, zoom, selección, deshacer, persistencia, vista móvil y apertura integrada cuando se bloquea la ventana emergente.
+
+## Cerrar espacios de silencio (1.5.0)
+
+En el editor independiente, selecciona un intervalo y pulsa Cortar y unir o ⌫ para quitarlo y adelantar los fragmentos siguientes de ese audio. Sirve también para una selección en blanco. Para unir todas sus partes sin quitar audio, pulsa Cerrar huecos, sin necesidad de seleccionar.
+
+Borrar dejando hueco (o Mayús+⌫) conserva las posiciones originales. Las otras pistas de MultiSesion no se desplazan. ⌘Z deshace la unión y recupera las posiciones y duración anteriores. El resultado se guarda en el proyecto y en el WAV exportado.
+
+Los fragmentos de una misma edición se vuelven a abrir juntos tras guardar y recargar. Se verificó también la recuperación conservadora de fragmentos de proyectos antiguos y la continuidad del audio exportado después de cerrar el hueco. Cerrar huecos une espacios entre fragmentos; los silencios dentro de un archivo se quitan seleccionándolos y usando Cortar y unir.
