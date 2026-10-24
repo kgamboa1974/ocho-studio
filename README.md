@@ -1,4 +1,4 @@
-# OCHO Studio 1.3.0
+# OCHO Studio 1.4.0
 
 Mezclador web de rutinas de cheerleading por bloques de ocho tiempos.
 
@@ -29,3 +29,13 @@ Publicación: Settings → Pages → Deploy from a branch → main → /(root) �
 - Esc quita la selección. ⌘Z o el botón Deshacer recupera las últimas ediciones de esta sesión. El historial no se conserva después de recargar. Los atajos de audio se desactivan mientras escribes en un campo.
 
 La versión 1.3.0 se verificó con 9 pruebas del motor y pruebas de Chromium para selección, edición, persistencia y audio PCM exportado.
+
+## Editor independiente (1.4.0)
+
+Haz doble clic en un clip para abrirlo en un editor independiente. También puedes usar Abrir editor en el inspector. Si las ventanas emergentes están bloqueadas, se abre dentro de OCHO.
+
+Amplía la onda, arrastra para seleccionar un tramo o escribe Desde/Hasta en segundos. Puedes escuchar solo ese audio o su selección, dividir en el cursor, borrar un tramo, conservar solo la selección, silenciar, modificar volumen y aplicar fundidos. Exportar este audio crea un WAV sin las demás pistas de la mezcla.
+
+El botón MultiSesion regresa a la cuadrícula completa de Música, Efectos y Voces. Las ediciones se reflejan directamente en el proyecto, se guardan con él y comparten Deshacer (⌘Z). Los cortes mantienen el audio original en la biblioteca. El editor se cierra cuando creas o abres otro proyecto.
+
+Se probaron con Chromium la apertura por doble clic, los cortes y ajustes sincronizados, reproducción y exportación aisladas, zoom, selección, deshacer, persistencia, vista móvil y apertura integrada cuando se bloquea la ventana emergente.

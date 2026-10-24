@@ -60,10 +60,14 @@ export function clipGainPoints(clip,length,secondsPerBlock){
  return times.map(at=>({at,value:factor(at)}));
 }
 export function editClipRange(clip,asset,project,rangeStart,rangeEnd,operation,value=1,newId=()=>crypto.randomUUID()){
- if(!['delete','mute','volume','fade-in','fade-out'].includes(operation))throw Error('Edición de tramo desconocida.');
+ if(!['delete','mute','volume','fade-in','fade-out','split','trim'].includes(operation))throw Error('Edición de tramo desconocida.');
  const seconds=blockSeconds(project.bpm),length=clipWindow(clip,asset,project).length/seconds;
  const start=clip.start,end=start+length,from=Math.max(start,rangeStart),to=Math.min(end,rangeEnd);
- if(to-from<=1e-10)return {clips:[clip],edited:false,editedId:null};
+ if(operation==='split'){
+  if(rangeStart<=start+1e-10||rangeStart>=end-1e-10)return {clips:[clip],edited:false,editedId:null};
+  return editClipRange(clip,asset,project,rangeStart,end,'volume',clip.volume,newId);
+ }
+ if(to-from<=1e-10)return operation==='trim'?{clips:[],edited:true,editedId:null}:{clips:[clip],edited:false,editedId:null};
  const points=clipGainPoints(clip,length,seconds),pieces=[];let editedId=null;
  const piece=(a,b,inside)=>{
   if(b-a<=1e-10)return;
@@ -79,7 +83,7 @@ export function editClipRange(clip,asset,project,rangeStart,rangeEnd,operation,v
   }
   pieces.push(part);
  };
- piece(start,from,false);if(operation!=='delete')piece(from,to,true);piece(to,end,false);
+ if(operation!=='trim')piece(start,from,false);if(operation!=='delete')piece(from,to,true);if(operation!=='trim')piece(to,end,false);
  return {clips:pieces,edited:true,editedId};
 }
 export function scheduleMix(ctx,project,assets,when,position=0,{click=false,destination=ctx.destination}={}) {
