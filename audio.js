@@ -2,9 +2,9 @@ export const CATEGORIES = ['music','effect','voice'];
 export function blockSeconds(bpm) { return 480 / bpm; }
 export function routineSeconds(project) { return project.blocks * blockSeconds(project.bpm); }
 export function clamp(value,min,max) { return Math.min(max,Math.max(min,value)); }
-export function formatTime(seconds, padded=false) {
- const tenths=Math.floor(Math.max(0,seconds)*10+0.001), mins=Math.floor(tenths/600), sec=Math.floor(tenths/10)%60;
- return `${padded?String(mins).padStart(2,'0'):mins}:${String(sec).padStart(2,'0')}.${tenths%10}`;
+export function formatTime(seconds,padded=false,decimals=1) {
+ const scale=10**decimals,ticks=Math.floor(Math.max(0,seconds)*scale+0.000001),mins=Math.floor(ticks/(60*scale)),sec=Math.floor(ticks/scale)%60;
+ return `${padded?String(mins).padStart(2,'0'):mins}:${String(sec).padStart(2,'0')}.${String(ticks%scale).padStart(decimals,'0')}`;
 }
 export function clipWindow(clip,asset,project) {
  const start=clip.start*blockSeconds(project.bpm);
