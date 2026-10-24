@@ -30,3 +30,10 @@
 @media(max-width:520px){.editor-heading{gap:6px;flex-wrap:wrap}.view-controls{margin-left:auto}.view-controls label{font-size:7px}.grid-options{padding:0 12px 12px;font-size:8px}.grid-options button{font-size:8px}.count-label>span{font-size:9px}}
 
 .timeline.counts-view .timeline-ruler{margin-left:105px;margin-right:1px}
+
+/* Time selection overlays are visual only; clips and pointer capture remain usable. */
+.time-range-band{position:absolute;top:0;bottom:0;background:#a979dc38;border-left:2px solid #a16bd3;border-right:2px solid #a16bd3;pointer-events:none;z-index:4;min-width:1px}
+.range-panel{border-top:1px solid #e6d8f5;border-bottom:1px solid #e6d8f5;background:#faf6ff;padding:14px 22px;color:#806499}.range-panel[hidden]{display:none}.range-heading{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.range-heading strong{font-size:11px}.range-heading span{font-size:10px;font-variant-numeric:tabular-nums}.range-heading button{margin-left:auto;background:none;border:0;color:#9673b5;font-size:20px;padding:0 4px}
+.range-actions{display:flex;align-items:end;gap:8px;margin-top:12px;flex-wrap:wrap}.range-actions label{display:flex;flex-direction:column;gap:4px;font-size:8px;letter-spacing:.5px}.range-actions select,.range-actions input{padding:6px;border:1px solid #ddceef;border-radius:4px;background:white;color:#7b6095;font-size:10px}.range-actions input{width:64px}.range-actions button{border:1px solid #ddceef;background:white;color:#8765a3;font-size:9px;border-radius:4px;padding:7px 8px}.range-actions .range-delete{background:#fff0f4;border-color:#efcbd6;color:#b05c78}.range-panel p{font-size:9px;color:#a28ab9;margin:10px 0 0}.view-controls{flex-wrap:wrap;justify-content:flex-end}
+
+.selection-tip{margin:0 22px 12px;font-size:9px;color:#9a86ac;line-height:1.7}

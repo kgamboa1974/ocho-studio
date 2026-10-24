@@ -42,6 +42,46 @@ export function generateDemo(ctx,kind,bpm=144) {
  }
  return b;
 }
+// Gain keyframes use fractional blocks, so slicing retains the original envelope.
+export function gainAt(points,at){
+ if(at<=points[0].at)return points[0].value;
+ for(let i=1;i<points.length;i++)if(at<=points[i].at){const a=points[i-1],b=points[i];return a.value+(b.value-a.value)*(at-a.at)/(b.at-a.at);}
+ return points.at(-1).value;
+}
+export function clipGainPoints(clip,length,secondsPerBlock){
+ if(clip.gainPoints){
+  const times=[0,...clip.gainPoints.map(p=>p.at).filter(t=>t>0&&t<length),length];
+  return times.map(at=>({at,value:gainAt(clip.gainPoints,at)}));
+ }
+ const fadeIn=Math.min(clip.fadeIn||0,length*secondsPerBlock/2)/secondsPerBlock;
+ const fadeOut=Math.min(clip.fadeOut||0,length*secondsPerBlock/2)/secondsPerBlock;
+ const factor=t=>Math.max(0,Math.min(1,fadeIn?t/fadeIn:1,fadeOut?(length-t)/fadeOut:1));
+ const times=[...new Set([0,fadeIn,length-fadeOut,length])].sort((a,b)=>a-b);
+ return times.map(at=>({at,value:factor(at)}));
+}
+export function editClipRange(clip,asset,project,rangeStart,rangeEnd,operation,value=1,newId=()=>crypto.randomUUID()){
+ if(!['delete','mute','volume','fade-in','fade-out'].includes(operation))throw Error('Edición de tramo desconocida.');
+ const seconds=blockSeconds(project.bpm),length=clipWindow(clip,asset,project).length/seconds;
+ const start=clip.start,end=start+length,from=Math.max(start,rangeStart),to=Math.min(end,rangeEnd);
+ if(to-from<=1e-10)return {clips:[clip],edited:false,editedId:null};
+ const points=clipGainPoints(clip,length,seconds),pieces=[];let editedId=null;
+ const piece=(a,b,inside)=>{
+  if(b-a<=1e-10)return;
+  const id=pieces.length?newId():clip.id,relative=a-start,last=b-start;
+  const times=[relative,...points.map(p=>p.at).filter(t=>t>relative&&t<last),last];
+  const part={...clip,id,start:a,length:b-a,offset:clip.offset+relative*seconds,fadeIn:0,fadeOut:0,gainPoints:times.map(t=>({at:t-relative,value:gainAt(points,t)}))};
+  if(inside){
+   editedId=id;
+   if(operation==='mute')part.volume=0;
+   if(operation==='volume')part.volume=clamp(value,0,1);
+   if(operation==='fade-in')part.gainPoints=[{at:0,value:0},{at:part.length,value:1}];
+   if(operation==='fade-out')part.gainPoints=[{at:0,value:1},{at:part.length,value:0}];
+  }
+  pieces.push(part);
+ };
+ piece(start,from,false);if(operation!=='delete')piece(from,to,true);piece(to,end,false);
+ return {clips:pieces,edited:true,editedId};
+}
 export function scheduleMix(ctx,project,assets,when,position=0,{click=false,destination=ctx.destination}={}) {
  const nodes=[];
  for(const c of project.clips){
@@ -50,13 +90,10 @@ export function scheduleMix(ctx,project,assets,when,position=0,{click=false,dest
   if(remaining<=0)continue;
   const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=asset.buffer;
   const at=when+Math.max(0,start-position),volume=c.volume*.68;
-  const fadeIn=Math.min(c.fadeIn||0,length/2),fadeOut=Math.min(c.fadeOut||0,length/2);
-  const envelope=e=>Math.max(0,Math.min(1,fadeIn?e/fadeIn:1,fadeOut?(length-e)/fadeOut:1))*volume;
-  gain.gain.setValueAtTime(envelope(elapsed),at);
-  if(fadeIn>elapsed)gain.gain.linearRampToValueAtTime(volume,at+fadeIn-elapsed);
-  const fadeStart=length-fadeOut;
-  if(fadeStart>elapsed)gain.gain.setValueAtTime(volume,at+fadeStart-elapsed);
-  gain.gain.linearRampToValueAtTime(envelope(length),at+remaining);
+  const points=clipGainPoints(c,length/blockSeconds(project.bpm),blockSeconds(project.bpm));
+  const elapsedBlocks=elapsed/blockSeconds(project.bpm);
+  gain.gain.setValueAtTime(gainAt(points,elapsedBlocks)*volume,at);
+  for(const point of points)if(point.at>elapsedBlocks)gain.gain.linearRampToValueAtTime(point.value*volume,at+(point.at-elapsedBlocks)*blockSeconds(project.bpm));
   source.connect(gain).connect(destination);source.start(at,c.offset+elapsed,remaining);nodes.push(source);
  }
  if(click){
@@ -71,6 +108,11 @@ export function scheduleMix(ctx,project,assets,when,position=0,{click=false,dest
 export function validateProject(p) {
  if(!p||p.version!==1||typeof p.name!=='string'||p.name.length>100||!Number.isFinite(p.bpm)||p.bpm<60||p.bpm>200||!Number.isInteger(p.blocks)||p.blocks<1||p.blocks>64||!Array.isArray(p.clips)||p.clips.length>512)throw Error('Formato de proyecto no válido.');
  const ids=new Set();
- for(const c of p.clips){if(!c||typeof c.id!=='string'||ids.has(c.id)||typeof c.assetId!=='string'||!CATEGORIES.includes(c.category)||!Number.isFinite(c.start)||c.start<0||c.start>=p.blocks||!Number.isFinite(c.length)||c.length<=0||!Number.isFinite(c.offset)||c.offset<0||!Number.isFinite(c.volume)||c.volume<0||c.volume>1||!Number.isFinite(c.fadeIn)||c.fadeIn<0||!Number.isFinite(c.fadeOut)||c.fadeOut<0)throw Error('El proyecto contiene un clip no válido.');ids.add(c.id);}
- return {version:1,name:p.name,bpm:p.bpm,blocks:p.blocks,clips:p.clips.map(c=>({...c}))};
+ for(const c of p.clips){if(!c||typeof c.id!=='string'||ids.has(c.id)||typeof c.assetId!=='string'||!CATEGORIES.includes(c.category)||!Number.isFinite(c.start)||c.start<0||c.start>=p.blocks||!Number.isFinite(c.length)||c.length<=0||!Number.isFinite(c.offset)||c.offset<0||!Number.isFinite(c.volume)||c.volume<0||c.volume>1||!Number.isFinite(c.fadeIn)||c.fadeIn<0||!Number.isFinite(c.fadeOut)||c.fadeOut<0)throw Error('El proyecto contiene un clip no válido.');if(c.gainPoints){
+  if(!Array.isArray(c.gainPoints)||c.gainPoints.length<2||c.gainPoints.length>32)throw Error('Envolvente de audio no válida.');
+  let previous=-1;
+  for(const p of c.gainPoints){if(!Number.isFinite(p.at)||p.at<0||p.at>c.length+1e-9||p.at<=previous||!Number.isFinite(p.value)||p.value<0||p.value>1)throw Error('Envolvente de audio no válida.');previous=p.at;}
+  if(c.gainPoints[0].at!==0||Math.abs(c.gainPoints.at(-1).at-c.length)>1e-9)throw Error('La envolvente no coincide con el clip.');
+ }ids.add(c.id);}
+ return {version:1,name:p.name,bpm:p.bpm,blocks:p.blocks,clips:p.clips.map(c=>({...c,...(c.gainPoints?{gainPoints:c.gainPoints.map(p=>({...p}))}:{})}))};
 }

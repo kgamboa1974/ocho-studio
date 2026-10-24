@@ -1,4 +1,4 @@
-# OCHO Studio 1.2.0
+# OCHO Studio 1.3.0
 
 Mezclador web de rutinas de cheerleading por bloques de ocho tiempos.
 
@@ -19,3 +19,13 @@ Los archivos se procesan en el navegador y el guardado automático usa IndexedDB
 Sitio estático sin dependencias de servidor ni cuentas de aplicación. Se verificaron con Chromium la importación MP3, el arrastre y alineación, la representación proporcional de duración, continuidad entre filas, persistencia, micrófono simulado, diseño móvil y exportación WAV audible. El micrófono físico y Safari no se han validado en un Mac real.
 
 Publicación: Settings → Pages → Deploy from a branch → main → /(root) → Save.
+
+## Teclado y edición por tramos
+
+- Haz clic en un clip y pulsa ⌫ (Delete de Mac / Backspace). Fn+Delete también funciona. Se quita el clip, no el archivo de la biblioteca.
+- Mantén el botón derecho mientras arrastras la línea azul o la franja de la fila para seleccionar parte del audio. Control+arrastre también selecciona un tramo.
+- El panel de edición situado debajo de la cuadrícula permite elegir el clip seleccionado, una pista o todas las pistas y borrar el tramo, silenciarlo, cambiar su volumen o aplicar entrada/salida gradual.
+- Borrar un tramo deja un hueco y conserva la posición y el audio anterior/posterior. Los efectos quedan incluidos al guardar el proyecto o exportar WAV.
+- Esc quita la selección. ⌘Z o el botón Deshacer recupera las últimas ediciones de esta sesión. El historial no se conserva después de recargar. Los atajos de audio se desactivan mientras escribes en un campo.
+
+La versión 1.3.0 se verificó con 9 pruebas del motor y pruebas de Chromium para selección, edición, persistencia y audio PCM exportado.
